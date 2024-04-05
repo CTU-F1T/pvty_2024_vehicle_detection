@@ -1,0 +1,19 @@
+#!/bin/bash
+# run this command to record bag
+# first argument is the folder within bag_recordings
+# second command is a bag file name
+
+topics=("/camera/aligned_depth_to_color/image_raw" "/camera/color/image_raw" "/camera/color/camera_info" "/camera/extrinsics/depth_to_color")
+folder="$1"
+fname="$2"
+rec_folder=$(find . ../ -maxdepth 1 -type d -name "bag_recordings")
+echo "RECFOLDER ${rec_folder}/${folder}"
+command="rosbag record -O ${rec_folder}/${folder}/${fname} "
+
+for topic in "${topics[@]}";do
+	command=$command$topic
+done
+echo "${command}"
+$command
+
+
