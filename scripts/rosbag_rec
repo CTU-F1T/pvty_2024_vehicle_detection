@@ -11,7 +11,7 @@ echo "RECFOLDER ${rec_folder}/${folder}"
 command="rosbag record -O ${rec_folder}/${folder}/${fname} "
 
 for topic in "${topics[@]}";do
-	command=$command$topic
+	command="$command$topic "
 done
 echo "${command}"
 $command
