@@ -1,5 +1,12 @@
 # FILES TO IGNORE
 
-bag_recordings
-logs
+/bag_recordings
+/logs
+/src/*/
+!/src/detection
+/build
+/devel
+.catkin_tools
+*.swp
+*.swo
 

@@ -1,0 +1,1 @@
+roslaunch realsense2_camera rs_camera.launch color_width:=640 color_height:=480 color_fps:=15 align_depth:=True
