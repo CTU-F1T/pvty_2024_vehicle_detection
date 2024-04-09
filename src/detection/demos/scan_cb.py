@@ -16,7 +16,6 @@ class ProcessScan():
 
     def __init__(self,visualise=False) -> None:
         rospy.loginfo('Initializing node')
-        rospy.init_node('reactive_controller')
         self.initialized = False
 
         rospy.Subscriber('/scan',LaserScan,self.scan_cb)
