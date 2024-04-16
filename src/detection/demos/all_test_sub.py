@@ -11,7 +11,10 @@ from cv_bridge import CvBridge
 import message_filters      # for calback data synchronisation
 from sensor_msgs.msg import LaserScan
 
-class ProcessImage:
+class ProcessData:  # rename to detect?
+    """
+    Class to process the data
+    """
 
     def __init__(self,visualise=False) -> None:
         rospy.loginfo('Initializing node')
@@ -27,6 +30,7 @@ class ProcessImage:
         self.brige = CvBridge()
 
         self.initialized = True
+        rospy.loginfo('Node initialized')
 
     def process_data(self,img:Image,depth:Image,scan:LaserScan):
         """
