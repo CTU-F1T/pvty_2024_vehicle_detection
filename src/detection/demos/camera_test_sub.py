@@ -26,6 +26,12 @@ class ProcessImage:
         self.vis = visualise
         self.brige = CvBridge()
 
+        self.detect_r = 100
+        self.init_rw = 300
+        self.init_rh = 150
+        self.rec_w = 200 # rec width
+        self.rec_h = 100 # rec height
+
         self.initialized = True
 
     def process_camera(self,img:Image,depth:Image):
@@ -43,13 +49,13 @@ class ProcessImage:
         hsv_im = cv2.cvtColor(img_data,cv2.COLOR_BGR2HSV)
         # plt.imshow(hsv_im)
         # plt.show()
-        hsv_low = np.array([0,120,80])
-        hsv_high = np.array([100,230,120])
-        hsv_mask = cv2.inRange(hsv_im,hsv_low,hsv_high)
-        hsv_filtered = cv2.bitwise_and(hsv_im,hsv_im,mask=~hsv_mask)
-        if self.vis:
-            cv2.imshow('hsv',hsv_im)
-            cv2.imshow('hsv filt',hsv_filtered)
+        # hsv_low = np.array([0,120,80])
+        # hsv_high = np.array([100,230,120])
+        # hsv_mask = cv2.inRange(hsv_im,hsv_low,hsv_high)
+        # hsv_filtered = cv2.bitwise_and(hsv_im,hsv_im,mask=~hsv_mask)
+        # if self.vis:
+            # cv2.imshow('hsv',hsv_im)
+            # cv2.imshow('hsv filt',hsv_filtered)
             # cv2.waitKey(1)
 
 
@@ -82,7 +88,9 @@ class ProcessImage:
         interest_mask[:50,:] = 0
         interest_mask[380:,:] = 0
 
-        rgb_from_hsv = cv2.cvtColor(hsv_filtered,cv2.COLOR_HSV2BGR)
+        # rgb_from_hsv = cv2.cvtColor(hsv_filtered,cv2.COLOR_HSV2BGR)
+        rgb_from_hsv = cv2.cvtColor(hsv_im,cv2.COLOR_HSV2BGR)
+
 
         rgb_from_hsv = cv2.bitwise_and(rgb_from_hsv,rgb_from_hsv,mask=interest_mask.astype(np.uint8))
         black_mask = (rgb_from_hsv == [0, 0, 0]).all(axis=2)
@@ -176,16 +184,48 @@ class ProcessImage:
         
         hgh2[merged_grad==1] = (0,0,255)
 
-        rows, cols = np.where(merged_grad == 1)
-            # Calculate the centroid
-        centroid_row = int(np.mean(rows))
-        centroid_col = int(np.mean(cols))
+        # rows, cols = np.where(merged_grad == 1)
+        #     # Calculate the centroid
+        # centroid_row = int(np.mean(rows))
+        # centroid_col = int(np.mean(cols))
         # print(centroid_col,centroid_row)
-        hgh2[centroid_row:centroid_row+10,centroid_col:centroid_col+10] = (255,0,0)
+        # hgh2[centroid_row-5:centroid_row+5,centroid_col-5:centroid_col+5] = (255,0,0)
 
         centroid_row,centroid_col = self.get_centroid_it(np.where(merged_grad==1))
 
-        hgh2[centroid_row:centroid_row+10,centroid_col:centroid_col+10] = (255,0,255)
+        if centroid_row != None:
+            #adaptive rectangle:
+            cr = 2
+            depth_mean = np.mean(depth_data[centroid_row-cr:centroid_row+cr,centroid_col-cr:centroid_col+cr])
+            # self.rec_w = self.init_rw*(depth_mean/1000)
+            # self.rec_h = self.init_rh*(depth_mean/1000)
+
+            hgh2[centroid_row-5:centroid_row+5,centroid_col-5:centroid_col+5] = (255,0,255)   
+            depth_mean = np.mean(depth_data[centroid_row-cr:centroid_row+cr,centroid_col-cr:centroid_col+cr])
+            # print('dm',depth_mean)
+            d_margin_l = 100
+            d_margin_h = 400
+            depth_mask = np.where((depth_data<depth_mean+d_margin_h)&(depth_data>depth_mean-d_margin_l))
+            # image_final = cv2.bitwise_and(img_data,img_data,mask=depth_mask.astype(np.uint8))
+            image_final = np.zeros_like(img_data)
+            image_final[depth_mask] = img_data[depth_mask]
+
+            rec_w = self.rec_w # rec width
+            rec_h = self.rec_h # rec height
+
+            tl = (int(centroid_col-rec_w/2),int(centroid_row-rec_h/2)) # top left
+            br = (int(centroid_col+rec_w/2),int(centroid_row+rec_h/2)) # bottom right
+            cv2.circle(image_final, (centroid_col,centroid_row), self.detect_r, (255, 255, 255), 1)
+            cv2.rectangle(image_final, tl, br, (0,255,0), thickness=2)
+
+            # print(mg_vis.shape)
+            mg_vis3 = np.repeat(mg_vis[:, :, np.newaxis], 3, axis=2) # creating 3d array for visualisation purpose only
+            cv2.rectangle(mg_vis3, tl, br, (0,255,0), thickness=2)
+
+            # if self.vis:
+            cv2.imshow('merged grad',mg_vis3)
+            cv2.imshow('final detection',image_final)
+            cv2.waitKey(1)
 
         # print('dg',np.max(grad_filt))
         # print('ig',np.max(grad_im_filt))
@@ -195,24 +235,25 @@ class ProcessImage:
 
         if self.vis:
             # cv2.imshow('d',depth_data)
-            cv2.imshow('dc',depth_colormap)
+            # cv2.imshow('dc',depth_colormap)
             cv2.imshow('original',img_data)
-            cv2.imshow('g',gradient)
-            cv2.imshow('gi',grad_filt)
-            cv2.imshow('gb',grad_filt_b)
-            cv2.imshow('im',filt_im)
-            cv2.imshow('zers',mask)
-            cv2.imshow('highlight',rgb_from_hsv)
-            cv2.imshow('canny',edge)
-            cv2.imshow('inv',gf2)
-            cv2.imshow('gray',gray_img)
-            cv2.imshow('gray grad',n_grad_im)
-            cv2.imshow('gray grad filt',n_grad_imf)
+            # cv2.imshow('g',gradient)
+            # cv2.imshow('gi',grad_filt)
+            # cv2.imshow('gb',grad_filt_b)
+            # cv2.imshow('im',filt_im)
+            # cv2.imshow('zers',mask)
+            # cv2.imshow('highlight',rgb_from_hsv)
+            # cv2.imshow('canny',edge)
+            # cv2.imshow('inv',gf2)
+            # cv2.imshow('gray',gray_img)
+            # cv2.imshow('gray grad',n_grad_im)
+            # cv2.imshow('gray grad filt',n_grad_imf)
             cv2.imshow('merged grad',mg_vis)
             cv2.imshow('highlight2',hgh2)
             # cv2.imshow('zers interp',mask2)
             # cv2.imshow('filt int grad',grad_filt_int)
             # cv2.imshow('secder',grad_filt_sd)
+            
             cv2.waitKey(1)
 
 
@@ -257,23 +298,58 @@ class ProcessImage:
         y = points[1]
 
         num_it = 10
-        radius = 150  # Adjust as needed
+        # radius = 150  # Adjust as needed
+        radius = self.detect_r
+        w = self.rec_w
+        h = self.rec_h
+        # w = self.init_rw
+        # h = self.init_rh
         # points = points.copy()
+        # print(points)
         if len(x) == 0:
-            return 0,0
+            rospy.logwarn('No points')
+            return None,None
+
         for i in range(num_it):
-            centroid_x = int(np.mean(x))
-            centroid_y = int(np.mean(y))
+            centroid_x = np.mean(x)
+            centroid_y = np.mean(y)
+
+            if not np.isnan(centroid_x) and not np.isnan(centroid_y):
+                # print('converted to int')
+                centroid_x = int(centroid_x)
+                centroid_y = int(centroid_y)
+            else:
+                # print('rip')
+                rospy.logwarn('NaN centroid')
+                return None, None
 
             if i == num_it:
                 continue
-            # Compute the squared distance from each point to the centroid
-            distance_squared = (x - centroid_x)**2 + (y - centroid_y)**2
-
+            # Compute the squared distance from each point to the centroid - CIRCLE
+            # distance_squared = (x - centroid_x)**2 + (y - centroid_y)**2
             # Mask the arrays based on the distance from the centroid
-            x = x[distance_squared <= radius**2]
-            y = y[distance_squared <= radius**2]
+            # x = x[distance_squared <= radius**2]
+            # y = y[distance_squared <= radius**2]
 
+            # RECTANGLE
+            left_boundary = centroid_x - w / 2
+            right_boundary = centroid_x + w / 2
+            top_boundary = centroid_y - h / 2
+            bottom_boundary = centroid_y + h / 2
+
+            # Find the indexes of the points that are completely within the rectangle
+            inside_rectangle_indexes = np.where((x >= left_boundary) & (x <= right_boundary) &
+                                                (y >= top_boundary) & (y <= bottom_boundary))[0]
+
+            # Remove the points that are completely within the rectangle
+            x = np.delete(x, inside_rectangle_indexes)
+            y = np.delete(y, inside_rectangle_indexes)
+
+            # FIXME: adaptive w,h
+            # h -= 5
+            # w -= 5
+
+        # print('returning',centroid_x,centroid_y)
         return centroid_x,centroid_y
         # for i in range(num_it):
         #     rows, cols = np.where(points == 1)
@@ -297,5 +373,5 @@ class ProcessImage:
 if __name__ == '__main__':
     print('DEMO CAMERA SUBSCRIBER')
     rospy.init_node('Image_node',anonymous=True)
-    ProcessImage(visualise=True)
+    ProcessImage(visualise=False)
     rospy.spin()
