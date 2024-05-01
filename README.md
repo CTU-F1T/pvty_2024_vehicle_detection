@@ -16,6 +16,7 @@ PVTY detekce
     - `git clone https://github.com/CTU-F1T/pvty_2024_vehicle_detection.git`
   - Download the rosbag from the Gdisk folder: https://drive.google.com/drive/u/1/folders/1NrswYhbbgiJ4l5COxxrjti3AzJohsMWV
   - Create `/src/data` folder in the git repo and save the rosbag there
+  - go to `/src` folder
   - Create python .venv and install the requirements.txt 
     - `pip install -r requirements.txt`
     - **you might have to link the ros from your Linux distro to the .venv using this command:
