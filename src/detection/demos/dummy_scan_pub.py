@@ -8,7 +8,7 @@ import numpy as np
 
 def publisher():
     pub = rospy.Publisher('/scan_dummy',LaserScan,queue_size=10)
-    rospy.init_node('Dummy publisher',anonymous=True)
+    rospy.init_node('Dummypublisher',anonymous=True)
     rate = rospy.Rate(5)
 
     inf = np.inf

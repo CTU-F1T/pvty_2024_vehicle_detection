@@ -11,6 +11,7 @@ import cv2
 from cv_bridge import CvBridge
 import message_filters      # for calback data synchronisation
 from sensor_msgs.msg import LaserScan
+from sklearn.cluster import DBSCAN
 
 class ProcessData:  # rename to detect?
     """
@@ -47,7 +48,17 @@ class ProcessData:  # rename to detect?
         # img_data = self.brige.imgmsg_to_cv2(img,desired_encoding="passthrough")     # converts to image (rgb8), to visualise with cv2 in true color use bgr8
         # depth_data = self.brige.imgmsg_to_cv2(depth,desired_encoding="passthrough") # 16UC1
         scan_data = self.process_scan(scan)
+        scan_data = [point for point in scan_data if not math.isnan(point[0]) and not math.isnan(point[1])]
         
+        # perform dbscan
+        clustering = DBSCAN(eps=0.1, min_samples=5).fit(scan_data)
+        labels = clustering.labels_
+        n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
+        n_noise_ = list(labels).count(-1)
+        print("Estimated number of clusters: %d" % n_clusters_)
+        print("Estimated number of noise points: %d" % n_noise_)
+        
+        # map data
         min_x = scan_data[0][0]
         min_y = scan_data[0][1]
         max_x = scan_data[0][0]
@@ -57,22 +68,40 @@ class ProcessData:  # rename to detect?
             min_y = min(min_y, y)
             max_x = max(max_x, x)
             max_y = max(max_y, y)
-        # print(min_x, min_y)
-        # print(max_x, max_y)
-        scan_img = np.zeros((500, 500, 3), dtype=np.uint8)
+        scan_map = np.zeros((500, 500), dtype=np.uint8)
         for x, y in scan_data:
             x = ((-min_x + x) / (max_x - min_x))*499
             y = ((-min_y + y) / (max_y - min_y))*499
-            print(x, y)
-            try:
+            x = round(x)
+            y = round(y)
+            scan_map[x, y] = 1  # Set RGB values to (255, 255, 255) at the coordinate
+            
+        # image
+        scan_img = np.zeros((500, 500, 3), dtype=np.uint8)
+        scan_img[scan_map == 1] = (255, 255, 255)
+        
+        # dbscan into image
+        unique_labels = set(labels)
+        # core_samples_mask = np.zeros_like(labels, dtype=bool)
+        # core_samples_mask[clustering.core_sample_indices_] = True
+        colors = [plt.cm.Spectral(each) for each in np.linspace(0, 1, len(unique_labels))]
+        for k, col in zip(unique_labels, colors):
+            if k == -1:
+                col = (255, 0, 0)
+            else:
+                col = [int(c*255) for c in col[0:3]]
+
+            indexes = [index for index, value in enumerate(labels) if value == k]
+            for i in indexes:
+                x = scan_data[i][0]
+                y = scan_data[i][1]
+                x = ((-min_x + x) / (max_x - min_x))*499
+                y = ((-min_y + y) / (max_y - min_y))*499
                 x = round(x)
                 y = round(y)
-            except:
-                continue
-            scan_img[x, y] = (255, 255, 255)  # Set RGB values to (255, 255, 255) at the coordinate
-
+                scan_img[x, y] = col
+            
         scan_img[POINT_OF_INTEREST[0], POINT_OF_INTEREST[1]] = (0, 0, 255)
-        
         cv2.imshow("Image", scan_img)
         cv2.waitKey(0)
 
