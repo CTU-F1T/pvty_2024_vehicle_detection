@@ -3,6 +3,7 @@
 """
 
 import rospy
+import math
 import numpy as np
 from sensor_msgs.msg import Image
 import matplotlib.pyplot as plt
@@ -20,10 +21,11 @@ class ProcessData:  # rename to detect?
         rospy.loginfo('Initializing node')
         self.initialized = False
 
-        self.im_sub = message_filters.Subscriber('/camera/color/image_raw',Image)
-        self.depth_sub = message_filters.Subscriber('/camera/aligned_depth_to_color/image_raw',Image)
-        self.scan_sub = message_filters.Subscriber('/scan',LaserScan)
-        self.ts = message_filters.ApproximateTimeSynchronizer([self.im_sub, self.depth_sub, self.scan_sub], queue_size=10, slop=0.5)
+        # self.im_sub = message_filters.Subscriber('/camera/color/image_raw',Image)
+        # self.depth_sub = message_filters.Subscriber('/camera/aligned_depth_to_color/image_raw',Image)
+        self.scan_sub = message_filters.Subscriber('/scan_dummy',LaserScan)
+        # self.ts = message_filters.ApproximateTimeSynchronizer([self.im_sub, self.depth_sub, self.scan_sub], queue_size=10, slop=0.5)
+        self.ts = message_filters.ApproximateTimeSynchronizer([self.scan_sub], queue_size=10, slop=0.5)
         self.ts.registerCallback(self.process_data)
 
         self.vis = visualise
@@ -32,21 +34,54 @@ class ProcessData:  # rename to detect?
         self.initialized = True
         rospy.loginfo('Node initialized')
 
-    def process_data(self,img:Image,depth:Image,scan:LaserScan):
+    # def process_data(self,img:Image,depth:Image,scan:LaserScan):
+    def process_data(self,scan:LaserScan):
         """
         input: image: image <Image> from the camera
                depth: depth <Image> from the camera lidar, aligned 
                scan: <LaserScan> from the planar lidar
         """
+        
+        POINT_OF_INTEREST = [195, 390]
 
-        img_data = self.brige.imgmsg_to_cv2(img,desired_encoding="passthrough")     # converts to image (rgb8), to visualise with cv2 in true color use bgr8
-        depth_data = self.brige.imgmsg_to_cv2(depth,desired_encoding="passthrough") # 16UC1
+        # img_data = self.brige.imgmsg_to_cv2(img,desired_encoding="passthrough")     # converts to image (rgb8), to visualise with cv2 in true color use bgr8
+        # depth_data = self.brige.imgmsg_to_cv2(depth,desired_encoding="passthrough") # 16UC1
         scan_data = self.process_scan(scan)
+        
+        min_x = scan_data[0][0]
+        min_y = scan_data[0][1]
+        max_x = scan_data[0][0]
+        max_y = scan_data[0][1]
+        for x, y in scan_data:
+            min_x = min(min_x, x)
+            min_y = min(min_y, y)
+            max_x = max(max_x, x)
+            max_y = max(max_y, y)
+        # print(min_x, min_y)
+        # print(max_x, max_y)
+        scan_img = np.zeros((500, 500, 3), dtype=np.uint8)
+        for x, y in scan_data:
+            x = ((-min_x + x) / (max_x - min_x))*499
+            y = ((-min_y + y) / (max_y - min_y))*499
+            print(x, y)
+            try:
+                x = round(x)
+                y = round(y)
+            except:
+                continue
+            scan_img[x, y] = (255, 255, 255)  # Set RGB values to (255, 255, 255) at the coordinate
 
+        scan_img[POINT_OF_INTEREST[0], POINT_OF_INTEREST[1]] = (0, 0, 255)
+        
+        cv2.imshow("Image", scan_img)
+        cv2.waitKey(0)
 
+        return
+    
         if self.vis:
             cv2.imshow('image',img_data)
             # cv2.waitKey(1)
+            
 
         # interp = self.interpolate(depth_data)
         
@@ -158,5 +193,5 @@ class ProcessData:  # rename to detect?
 if __name__ == '__main__':
     print('DEMO CAMERA SUBSCRIBER')
     rospy.init_node('Image_node',anonymous=True)
-    ProcessImage(visualise=False)
+    ProcessData(visualise=False)
     rospy.spin()
