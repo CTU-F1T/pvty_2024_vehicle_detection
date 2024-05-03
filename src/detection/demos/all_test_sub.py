@@ -43,12 +43,17 @@ class ProcessData:  # rename to detect?
                scan: <LaserScan> from the planar lidar
         """
         
-        POINT_OF_INTEREST = [195, 390]
+        POINT_OF_INTEREST = [0.9, 0.1]
+        FILTER_RADIUS = 0.6
 
         # img_data = self.brige.imgmsg_to_cv2(img,desired_encoding="passthrough")     # converts to image (rgb8), to visualise with cv2 in true color use bgr8
         # depth_data = self.brige.imgmsg_to_cv2(depth,desired_encoding="passthrough") # 16UC1
         scan_data = self.process_scan(scan)
+        # remove nans
         scan_data = [point for point in scan_data if not math.isnan(point[0]) and not math.isnan(point[1])]
+        
+        # crop by point of interest
+        scan_data = [point for point in scan_data if point[0] > POINT_OF_INTEREST[0] - FILTER_RADIUS and point[0] < POINT_OF_INTEREST[0] + FILTER_RADIUS and point[1] > POINT_OF_INTEREST[1] - FILTER_RADIUS and point[1] < POINT_OF_INTEREST[1] + FILTER_RADIUS]
         
         # perform dbscan
         clustering = DBSCAN(eps=0.1, min_samples=5).fit(scan_data)
@@ -58,54 +63,59 @@ class ProcessData:  # rename to detect?
         print("Estimated number of clusters: %d" % n_clusters_)
         print("Estimated number of noise points: %d" % n_noise_)
         
-        # map data
-        min_x = scan_data[0][0]
-        min_y = scan_data[0][1]
-        max_x = scan_data[0][0]
-        max_y = scan_data[0][1]
-        for x, y in scan_data:
-            min_x = min(min_x, x)
-            min_y = min(min_y, y)
-            max_x = max(max_x, x)
-            max_y = max(max_y, y)
-        scan_map = np.zeros((500, 500), dtype=np.uint8)
-        for x, y in scan_data:
-            x = ((-min_x + x) / (max_x - min_x))*499
-            y = ((-min_y + y) / (max_y - min_y))*499
-            x = round(x)
-            y = round(y)
-            scan_map[x, y] = 1  # Set RGB values to (255, 255, 255) at the coordinate
-            
-        # image
-        scan_img = np.zeros((500, 500, 3), dtype=np.uint8)
-        scan_img[scan_map == 1] = (255, 255, 255)
-        
-        # dbscan into image
-        unique_labels = set(labels)
-        # core_samples_mask = np.zeros_like(labels, dtype=bool)
-        # core_samples_mask[clustering.core_sample_indices_] = True
-        colors = [plt.cm.Spectral(each) for each in np.linspace(0, 1, len(unique_labels))]
-        for k, col in zip(unique_labels, colors):
-            if k == -1:
-                col = (255, 0, 0)
-            else:
-                col = [int(c*255) for c in col[0:3]]
-
-            indexes = [index for index, value in enumerate(labels) if value == k]
-            for i in indexes:
-                x = scan_data[i][0]
-                y = scan_data[i][1]
+        if self.vis:
+            # map data
+            min_x = scan_data[0][0]
+            min_y = scan_data[0][1]
+            max_x = scan_data[0][0]
+            max_y = scan_data[0][1]
+            for x, y in scan_data:
+                min_x = min(min_x, x)
+                min_y = min(min_y, y)
+                max_x = max(max_x, x)
+                max_y = max(max_y, y)
+            scan_map = np.zeros((500, 500), dtype=np.uint8)
+            for x, y in scan_data:
                 x = ((-min_x + x) / (max_x - min_x))*499
                 y = ((-min_y + y) / (max_y - min_y))*499
                 x = round(x)
                 y = round(y)
-                scan_img[x, y] = col
+                scan_map[x, y] = 1  # Set RGB values to (255, 255, 255) at the coordinate
+        
+            # image
+            scan_img = np.zeros((500, 500, 3), dtype=np.uint8)
+            scan_img[scan_map == 1] = (255, 255, 255)
             
-        scan_img[POINT_OF_INTEREST[0], POINT_OF_INTEREST[1]] = (0, 0, 255)
-        cv2.imshow("Image", scan_img)
-        cv2.waitKey(0)
+            # dbscan into image
+            unique_labels = set(labels)
+            # core_samples_mask = np.zeros_like(labels, dtype=bool)
+            # core_samples_mask[clustering.core_sample_indices_] = True
+            colors = [plt.cm.Spectral(each) for each in np.linspace(0, 1, len(unique_labels))]
+            for k, col in zip(unique_labels, colors):
+                if k == -1:
+                    col = (255, 0, 0)
+                else:
+                    col = [int(c*255) for c in col[0:3]]
 
-        return
+                indexes = [index for index, value in enumerate(labels) if value == k]
+                for i in indexes:
+                    x = scan_data[i][0]
+                    y = scan_data[i][1]
+                    x = ((-min_x + x) / (max_x - min_x))*499
+                    y = ((-min_y + y) / (max_y - min_y))*499
+                    x = round(x)
+                    y = round(y)
+                    scan_img[x, y] = col
+            
+            # show the cam mean of the car in the pic
+            x = ((-min_x + POINT_OF_INTEREST[0]) / (max_x - min_x))*499
+            y = ((-min_y + POINT_OF_INTEREST[1]) / (max_y - min_y))*499
+            x = round(x)
+            y = round(y)
+            scan_img[x, y] = (0, 0, 255)
+            
+            cv2.imshow("Image", scan_img)
+            cv2.waitKey(0)
     
         if self.vis:
             cv2.imshow('image',img_data)
@@ -222,5 +232,5 @@ class ProcessData:  # rename to detect?
 if __name__ == '__main__':
     print('DEMO CAMERA SUBSCRIBER')
     rospy.init_node('Image_node',anonymous=True)
-    ProcessData(visualise=False)
+    ProcessData(visualise=True)
     rospy.spin()
