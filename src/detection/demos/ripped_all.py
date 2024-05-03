@@ -46,12 +46,9 @@ class ProcessData:  # rename to detect?
         self.rec_w = 200
         self.rec_h = 100
 
-        self.K = np.array([[604.3504028320312, 0.0, 321.988525390625], [0.0, 604.9443359375, 241.68743896484375], [0.0, 0.0, 1.0]])
-        self.R = np.array([[0, 0, 1],[0, 1, 0],[1, 0, 0]])
         self.P = np.array([[604.3504028320312, 0.0, 321.988525390625,0.0],[0.0, 604.9443359375, 241.68743896484375, 0.0], [0.0, 0.0, 1.0, 0.0]])
 
-        
-        self.CAM_LID = np.array([])
+
 
         self.initialized = True
         rospy.loginfo('Node initialized')
@@ -104,40 +101,17 @@ class ProcessData:  # rename to detect?
         interest_mask[380:,:] = 0
 
         merged_grad = cv2.bitwise_and(grad_filt_b,grad_im_filt.astype(np.float32),mask=interest_mask.astype(np.uint8)) # merges the gradients together
-
-        # VISUALISE DEPTH:
-        if self.vis:
-            rgb_from_hsv = cv2.cvtColor(hsv_im,cv2.COLOR_HSV2BGR)
-            rgb_from_hsv = cv2.bitwise_and(rgb_from_hsv,rgb_from_hsv,mask=interest_mask.astype(np.uint8))
-            light_green = (144, 238, 144)  
-            replace_black_mask = (rgb_from_hsv == [0, 0, 0]).all(axis=2)        # replace black with light green for better visualisation
-            rgb_from_hsv[replace_black_mask] = light_green
-
-
-            normalized_depth_data = (depth_data- np.min(depth_data)) / (np.max(depth_data) - np.min(depth_data))
-            # Apply a colormap to the normalized depth data
-            depth_colormap = cv2.applyColorMap(np.uint8(normalized_depth_data * 255), cv2.COLORMAP_JET)
-            # cv2.imshow('int',depth_colormap)
-        
-
-            n_grad_im = ((grad_im - np.min(grad_im)) / (np.max(grad_im) - np.min(grad_im)) * 255).astype(np.uint8)
-            n_grad_imf = ((grad_im_filt - np.min(grad_im_filt)) / (np.max(grad_im_filt) - np.min(grad_im_filt)) * 255).astype(np.uint8)
-            # cv2.imshow('gray grad',n_grad_im)
-            # cv2.imshow('gray grad filt',n_grad_imf)
-
-            hgh2 = rgb_from_hsv.copy()
-            hgh2[merged_grad==1] = (0,0,255)
-        
-            mg_vis = merged_grad.astype(np.uint8) * 255      
+   
 
         centroid_row,centroid_col = self.get_centroid_it(np.where(merged_grad==1))  # gets the centroid of the points                         
 
         if centroid_row != None:
-            cr = 2          # set the  width for the mean
-            depth_mean = np.mean(depth_data[centroid_row-cr:centroid_row+cr,centroid_col-cr:centroid_col+cr])   # get the mean of depth in the centroid
-
-            if self.vis:
-                hgh2[centroid_row-5:centroid_row+5,centroid_col-5:centroid_col+5] = (255,0,255) 
+            cr = 10        # set the  width for the mean
+            d_ker = depth_data[centroid_row-cr:centroid_row+cr,centroid_col-cr:centroid_col+cr]
+            ker_min = np.min(d_ker)
+            ker_th = 500
+            ker_idx = np.where(d_ker-ker_min<=ker_th)
+            depth_mean = np.mean(d_ker[ker_idx])   # get the mean of depth in the centroid
 
             d_margin_l = 100
             d_margin_h = 400
@@ -152,167 +126,44 @@ class ProcessData:  # rename to detect?
             # self.rec_w = self.init_rw*(depth_mean/1000)
             # self.rec_h = self.init_rh*(depth_mean/1000)
 
-            if self.vis:
-                tl = (int(centroid_col-rec_w/2),int(centroid_row-rec_h/2)) # top left
-                br = (int(centroid_col+rec_w/2),int(centroid_row+rec_h/2)) # bottom right
-                cv2.circle(image_final, (centroid_col,centroid_row), self.detect_r, (255, 255, 255), 1)
-                cv2.rectangle(image_final, tl, br, (0,255,0), thickness=2)
-
-                mg_vis3 = np.repeat(mg_vis[:, :, np.newaxis], 3, axis=2) # creating 3d array for visualisation purpose only
-                cv2.rectangle(mg_vis3, tl, br, (0,255,0), thickness=2)
-
-                #cv2.imshow('merged grad',mg_vis3)
-                image_final[centroid_row-5:centroid_row+5,centroid_col-5:centroid_col+5] = (255,0,255)
-                cv2.imshow('final detection',image_final)
-            
-
-        if self.vis:
-            # VISUAlISATION
-
-            # cv2.imshow('d',depth_data)
-            # cv2.imshow('dc',depth_colormap)
-            # cv2.imshow('original',img_data)
-            # cv2.imshow('g',gradient)
-            # cv2.imshow('gi',grad_filt)
-            # cv2.imshow('gb',grad_filt_b)
-            # cv2.imshow('im',filt_im)
-            # cv2.imshow('zers',mask)
-            # cv2.imshow('highlight',rgb_from_hsv)
-            # cv2.imshow('canny',edge)
-            # cv2.imshow('inv',gf2)
-            # cv2.imshow('gray',gray_img)
-            # cv2.imshow('gray grad',n_grad_im)
-            # cv2.imshow('gray grad filt',n_grad_imf)
-            cv2.imshow('merged grad',mg_vis)
-            # cv2.imshow('highlight2',hgh2)
-            # cv2.imshow('zers interp',mask2)
-            # cv2.imshow('filt int grad',grad_filt_int)
-            # cv2.imshow('secder',grad_filt_sd)
-            
-            #cv2.waitKey(1)
+            POINT_OF_INTEREST = [centroid_row,centroid_col]
+            # potreba pretransofrmovat do lidar frame
+            depth_int = depth_data[centroid_row,centroid_col] if depth_data[centroid_row,centroid_col] != 0 else 1
+            POINT_OF_INTEREST = self.pix_to_camera(POINT_OF_INTEREST,depth=depth_int)
 
 
-        POINT_OF_INTEREST = [centroid_row,centroid_col]
-        # potreba pretransofrmovat do lidar frame
-        depth = depth_data[centroid_row,centroid_col] if depth_data[centroid_row,centroid_col] != 0 else 1
-        POINT_OF_INTEREST = self.pix_to_camera(POINT_OF_INTEREST,depth=depth)
+            # PUBLISH MARKER
 
+            marker = Marker()
 
-        # PUBLISH MARKER
+            marker.header.frame_id = "laser"
+            marker.header.stamp = rospy.Time.now()
 
-        marker = Marker()
+            # set shape, Arrow: 0; Cube: 1 ; Sphere: 2 ; Cylinder: 3
+            marker.type = 2
+            marker.id = 0
 
-        marker.header.frame_id = "laser"
-        marker.header.stamp = rospy.Time.now()
+            # Set the scale of the marker
+            marker.scale.x = 0.1
+            marker.scale.y = 0.1
+            marker.scale.z = 0.1
 
-        # set shape, Arrow: 0; Cube: 1 ; Sphere: 2 ; Cylinder: 3
-        marker.type = 2
-        marker.id = 0
+            # Set the color
+            marker.color.r = 0.0
+            marker.color.g = 1.0
+            marker.color.b = 0.0
+            marker.color.a = 1.0
 
-        # Set the scale of the marker
-        marker.scale.x = 0.1
-        marker.scale.y = 0.1
-        marker.scale.z = 0.1
+            # Set the pose of the marker
+            marker.pose.position.x = POINT_OF_INTEREST[0]
+            marker.pose.position.y = POINT_OF_INTEREST[1]
+            marker.pose.position.z = 0
+            marker.pose.orientation.x = 0.0
+            marker.pose.orientation.y = 0.0
+            marker.pose.orientation.z = 0.0
+            marker.pose.orientation.w = 0.0
 
-        # Set the color
-        marker.color.r = 0.0
-        marker.color.g = 1.0
-        marker.color.b = 0.0
-        marker.color.a = 1.0
-
-        # Set the pose of the marker
-        marker.pose.position.x = POINT_OF_INTEREST[0]
-        marker.pose.position.y = POINT_OF_INTEREST[1]
-        marker.pose.position.z = 0
-        marker.pose.orientation.x = 0.0
-        marker.pose.orientation.y = 0.0
-        marker.pose.orientation.z = 0.0
-        marker.pose.orientation.w = 0.0
-
-        self.marker_pub.publish(marker)
-
-
-
-
-        # LIDAR SCAN PROCESSING ###################################################################################################
-        # remove nans
-        scan_data = [point for point in scan_data if not math.isnan(point[0]) and not math.isnan(point[1])]
-        
-        # crop by point of interest
-        #scan_data = [point for point in scan_data if point[0] > POINT_OF_INTEREST[0] - FILTER_RADIUS and point[0] < POINT_OF_INTEREST[0] + FILTER_RADIUS and point[1] > POINT_OF_INTEREST[1] - FILTER_RADIUS and point[1] < POINT_OF_INTEREST[1] + FILTER_RADIUS]
-        # print(type(scan_data),len(scan_data)) 
-        # perform dbscan
-        clustering = DBSCAN(eps=0.1, min_samples=5).fit(scan_data)
-        labels = clustering.labels_
-        n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
-        n_noise_ = list(labels).count(-1)
-        print("Estimated number of clusters: %d" % n_clusters_)
-        print("Estimated number of noise points: %d" % n_noise_)
-        # print(np.min(np.array(scan_data)),np.max(np.array(scan_data)))
-        
-        if self.vis:
-            d2vis = 500
-            # map data
-            min_x = scan_data[0][0]
-            min_y = scan_data[0][1]
-            max_x = scan_data[0][0]
-            max_y = scan_data[0][1]
-            # print(min_x,min_y,max_x,max_y)
-            for x, y in scan_data:
-                min_x = min(min_x, x)
-                min_y = min(min_y, y)
-                max_x = max(max_x, x)
-                max_y = max(max_y, y)
-            scan_map = np.zeros((d2vis, d2vis), dtype=np.uint8)
-            for x, y in scan_data:
-                # print('b',x,y)
-                x = ((-min_x + x) / (max_x - min_x))*(d2vis-1)
-                y = ((-min_y + y) / (max_y - min_y))*(d2vis-1)
-                x = round(x)
-                y = round(y)
-                # print(x,y)
-                scan_map[y, x] = 1  # Set RGB values to (255, 255, 255) at the coordinate
-        
-            # image
-            scan_img = np.zeros((d2vis, d2vis, 3), dtype=np.uint8)
-            # scan_img[scan_map == 1] = (255, 255, 255)
-            
-            # dbscan into image
-            unique_labels = set(labels)
-            # core_samples_mask = np.zeros_like(labels, dtype=bool)
-            # core_samples_mask[clustering.core_sample_indices_] = True
-            colors = [plt.cm.Spectral(each) for each in np.linspace(0, 1, len(unique_labels))]
-            for k, col in zip(unique_labels, colors):
-                if k == -1:
-                    col = (255, 0, 0)
-                else:
-                    col = [int(c*255) for c in col[0:3]]
-
-                indexes = [index for index, value in enumerate(labels) if value == k]
-                for i in indexes:
-                    x = scan_data[i][0]
-                    y = scan_data[i][1]
-                    x = ((-min_x + x) / (max_x - min_x))*(d2vis-1)
-                    y = ((-min_y + y) / (max_y - min_y))*(d2vis-1)
-                    x = round(x)
-                    y = round(y)
-                    scan_img[d2vis-y-1, x] = col
-            
-            # show the cam mean of the car in the pic
-            x = ((-min_x + POINT_OF_INTEREST[0]) / (max_x - min_x))*(d2vis-1)
-            y = ((-min_y + POINT_OF_INTEREST[1]) / (max_y - min_y))*(d2vis-1)
-            x = round(x)
-            y = round(y)
-            scan_img[x-5:x+5,y-5:y+5] = (0, 0, 255)
-            
-            cv2.imshow("Image", scan_img)
-            #cv2.waitKey(0)
-    
-        if self.vis:
-            cv2.imshow('image',img_data)
-            cv2.waitKey(1)
-            
-
+            self.marker_pub.publish(marker)
 
 
 
