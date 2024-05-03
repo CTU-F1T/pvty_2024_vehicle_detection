@@ -26,7 +26,7 @@ class ProcessImage:
         self.vis = visualise
         self.brige = CvBridge()
 
-        self.detect_r = 100
+        self.detect_r = 100 # circle radius
         self.init_rw = 300
         self.init_rh = 150
         self.rec_w = 200 # rec width
@@ -213,8 +213,8 @@ class ProcessImage:
                                                 (y < top_boundary) & (y > bottom_boundary))[0]
 
             # Remove the points that are not completely within the rectangle
-            x = np.delete(x, inside_rectangle_indexes)
-            y = np.delete(y, inside_rectangle_indexes)
+            x = np.delete(x, ~inside_rectangle_indexes)
+            y = np.delete(y, ~inside_rectangle_indexes)
 
             # FIXME: adaptive w,h
             # h -= 5
