@@ -3,7 +3,7 @@
 # first argument is the folder within bag_recordings
 # second command is a bag file name
 
-topics=("/camera/aligned_depth_to_color/image_raw" "/camera/color/image_raw" "/camera/color/camera_info" "/camera/extrinsics/depth_to_color")
+topics=("/scan" "/camera/aligned_depth_to_color/image_raw" "/camera/color/image_raw" "/camera/color/camera_info" "/camera/extrinsics/depth_to_color")
 folder="$1"
 fname="$2"
 rec_folder=$(find . ../ -maxdepth 1 -type d -name "bag_recordings")
