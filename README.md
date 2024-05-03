@@ -25,4 +25,7 @@ PVTY detekce
     - 1. `roscore` 
     - 2. `rosbag play src/data/01_test_rec.bag`
     - 3. `python3 camera_test_sub.py`
-  
+
+  # running the script
+  - run: export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1
+    
