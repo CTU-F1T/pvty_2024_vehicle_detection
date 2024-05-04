@@ -11,7 +11,6 @@ import cv2
 from cv_bridge import CvBridge
 import message_filters      # for calback data synchronisation
 from sensor_msgs.msg import LaserScan
-from sklearn.cluster import DBSCAN
 from visualization_msgs.msg import Marker
 
 class ProcessData:  # rename to detect?
@@ -33,11 +32,14 @@ class ProcessData:  # rename to detect?
         # self.ts = message_filters.ApproximateTimeSynchronizer([self.scan_sub], queue_size=10, slop=0.5)
         self.ts.registerCallback(self.process_data)
 
-        self.marker_pub = rospy.Publisher('/detection_marker',Marker, queue_size=2)
+        self.marker_pub = rospy.Publisher('/detection/marker',Marker, queue_size=2)
+        self.grad_pub = rospy.Publisher('/detection/merged_grad',Image,queue_size=2)
 
         self.vis = visualise
-        self.brige = CvBridge()
+        self.bridge = CvBridge()
         self.scan = None
+
+        self.last_depth = None
         
         self.detect_r = 100
         self.init_rw = 300
@@ -64,21 +66,18 @@ class ProcessData:  # rename to detect?
         # POINT_OF_INTEREST = [0.9, 0.1]
         FILTER_RADIUS = 0.6
 
-        img_data = self.brige.imgmsg_to_cv2(img,desired_encoding="passthrough")     # converts to image (rgb8), to visualise with cv2 in true color use bgr8
-        depth_data = self.brige.imgmsg_to_cv2(depth,desired_encoding="passthrough") # 16UC1
+        img_data = self.bridge.imgmsg_to_cv2(img,desired_encoding="passthrough")     # converts to image (rgb8), to visualise with cv2 in true color use bgr8
+        depth_data = self.bridge.imgmsg_to_cv2(depth,desired_encoding="passthrough") # 16UC1
         scan = self.scan
         if scan is None:
           print('scan is none')
           return -1
-        scan_data = self.process_scan(scan)
-        #print('scd',scan_data)
-        # print(len(scan_data))
+        scan = self.process_scan(scan)
+
 
         # IMAGE PROCESSING #######################################################################################################
 
         gray_img = cv2.cvtColor(img_data, cv2.COLOR_BGR2GRAY)                       # grayscale image
-        if self.vis:
-            hsv_im = cv2.cvtColor(img_data,cv2.COLOR_BGR2HSV)                           # hsv image - not used now
 
         blurred_depth = cv2.GaussianBlur(depth_data, (13, 13), 1)                   # depth filtered with gaussian 
         grad_blurred = self.get_grad(blurred_depth)                                 # magnitude of x,y gradients
@@ -101,6 +100,13 @@ class ProcessData:  # rename to detect?
         interest_mask[380:,:] = 0
 
         merged_grad = cv2.bitwise_and(grad_filt_b,grad_im_filt.astype(np.float32),mask=interest_mask.astype(np.uint8)) # merges the gradients together
+
+        # mg_im = Image()
+        # mg_im.header.stamp = rospy.Time.now()
+        mg_im= self.bridge.cv2_to_imgmsg(merged_grad, encoding="passthrough")
+        # mg_im.width = merged_grad.shape[1]
+        # mg_im.height = merged_grad.shape[0]
+        self.grad_pub.publish(mg_im)
    
 
         centroid_row,centroid_col = self.get_centroid_it(np.where(merged_grad==1))  # gets the centroid of the points                         
@@ -129,6 +135,9 @@ class ProcessData:  # rename to detect?
             POINT_OF_INTEREST = [centroid_row,centroid_col]
             # potreba pretransofrmovat do lidar frame
             depth_int = depth_data[centroid_row,centroid_col] if depth_data[centroid_row,centroid_col] != 0 else 1
+            if depth_int == 0 and self.last_depth is not None:
+                depth_int = self.last_depth
+            self.last_depth = depth_int
             POINT_OF_INTEREST = self.pix_to_camera(POINT_OF_INTEREST,depth=depth_int)
 
 
