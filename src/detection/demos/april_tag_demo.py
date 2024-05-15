@@ -381,7 +381,7 @@ class ProcessData:  # rename to detect?
 
         dist_d = 250
         dist_c = 100
-        # print('start')
+        print('start')
         while len(q):
             # print('len',len(q))
             u = np.array(q.pop(0))
@@ -401,7 +401,7 @@ class ProcessData:  # rename to detect?
                             mask[v[0]-chunk:v[0]+chunk,v[1]-chunk:v[1]+chunk] = 1
                             visited[v[0],v[1]] = 1
 
-        # print('end')
+        print('end')
         # print('im,d',image.shape,mask.shape)
         # filtered = cv2.bitwise_and(image,image,mask=mask)
         # filtered = np.zeros_like(image)
@@ -418,11 +418,6 @@ class ProcessData:  # rename to detect?
     
     def __rgb_close(self,p1,p2):
         return np.sqrt(np.sum((p1 - p2) ** 2))
-    
-    def __filter_planar(self,scan):
-        '''Filter the road boundaries from planar scan, scan is ndarray of x,y points
-        '''
-        pass
 
 
 
