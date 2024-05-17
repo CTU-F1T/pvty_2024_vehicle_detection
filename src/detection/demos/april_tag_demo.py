@@ -13,6 +13,12 @@ import message_filters      # for calback data synchronisation
 from sensor_msgs.msg import LaserScan
 from visualization_msgs.msg import Marker
 import matplotlib.pyplot as plt
+from sensor_msgs.msg import CameraInfo
+from geometry_msgs.msg import PoseStamped
+import tf
+
+import apriltag
+import time
 
 
 class ProcessData:  # rename to detect?
@@ -34,9 +40,15 @@ class ProcessData:  # rename to detect?
         # self.ts = message_filters.ApproximateTimeSynchronizer([self.scan_sub], queue_size=10, slop=0.5)
         self.ts.registerCallback(self.process_data)
 
+        rospy.Subscriber('/camera/color/camera_info', CameraInfo, self.camera_info_callback)
+
         self.marker_pub = rospy.Publisher('/detection/marker',Marker, queue_size=1)
         self.grad_pub = rospy.Publisher('/detection/merged_grad',Image,queue_size=1)
         self.focus_pub = rospy.Publisher('/detection/focus',Image,queue_size=1)
+        self.at_pub = rospy.Publisher('/detection/april_tags',Image,queue_size=1)
+        self.at_marker_pub = rospy.Publisher('/detection/at_marker',Marker, queue_size=1)
+        self.pose_pub = rospy.Publisher('/detection/pose_estimate', PoseStamped, queue_size=1)
+
 
         self.vis = visualise
         self.bridge = CvBridge()
@@ -54,9 +66,20 @@ class ProcessData:  # rename to detect?
         self.P = np.array([[604.3504028320312, 0.0, 321.988525390625,0.0],[0.0, 604.9443359375, 241.68743896484375, 0.0], [0.0, 0.0, 1.0, 0.0]])
 
 
+        options = apriltag.DetectorOptions(families="tag36h11")
+
+        self.at_detector = apriltag.Detector(options)
+        self.tag_size = 0.1
+
 
         self.initialized = True
         rospy.loginfo('Node initialized')
+
+    def camera_info_callback(self,msg):
+        self.camera_matrix = np.array(msg.K).reshape(3, 3)
+        # Extract the distortion coefficients
+        self.dist_coeffs = np.array(msg.D)
+        # print('CAMinfo',self.camera_matrix,self.dist_coeffs)
 
     def process_data(self,img:Image,depth:Image):
     # def process_data(self,scan:LaserScan):
@@ -65,8 +88,11 @@ class ProcessData:  # rename to detect?
                depth: depth <Image> from the camera lidar, aligned 
                scan: <LaserScan> from the planar lidar
         """
-        rospy.loginfo('process data cb')        
+        # rospy.loginfo('process data cb')        
         # POINT_OF_INTEREST = [0.9, 0.1]
+        start_time = time.time()
+
+
         FILTER_RADIUS = 0.6
 
         img_data = self.bridge.imgmsg_to_cv2(img,desired_encoding="passthrough")     # converts to image (rgb8), to visualise with cv2 in true color use bgr8
@@ -110,9 +136,128 @@ class ProcessData:  # rename to detect?
         # mg_im.width = merged_grad.shape[1]
         # mg_im.height = merged_grad.shape[0]
         self.grad_pub.publish(mg_im)
+
+        tags = self.at_detector.detect(gray_img)
+
+        # print(tags)
+        # Draw the detected tags and estimate their poses
+        at_image = np.copy(img_data)
+        for tag in tags:
+            corners = tag.corners
+            # print('CT',tag.center)
+            tag_center = tag.center
+            for i in range(4):
+                pt1 = (int(corners[i][0]), int(corners[i][1]))
+                pt2 = (int(corners[(i + 1) % 4][0]), int(corners[(i + 1) % 4][1]))
+                cv2.line(at_image, pt1, pt2, (0, 255, 0), 2)
+            center = (int(tag.center[0]), int(tag.center[1]))
+            cv2.putText(at_image, str(tag.tag_id), center, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+
+            # Estimate the pose of the tag
+            pose, e0, e1 = self.at_detector.detection_pose(
+                tag, 
+                camera_params=(
+                    self.camera_matrix[0, 0], 
+                    self.camera_matrix[1, 1], 
+                    self.camera_matrix[0, 2], 
+                    self.camera_matrix[1, 2]
+                ), 
+                tag_size=self.tag_size
+            )
+
+            rvec = pose[:3, :3]
+            tvec = pose[:3, 3]
+
+            euler_angles = self.__rotation_matrix_to_euler_angles(pose[:3, :3])
+            e_angl_deg = np.degrees(euler_angles)
+
+            tag_dist = tvec[2]
+
+            # Print the pose information
+            # print(f"Tag ID: {tag.tag_id}")
+            # print("Rotation Matrix (rvec):\n", rvec)
+            # print("Translation Vector (tvec):\n", tvec)
+            # print("Euler Angles (radians):\n", euler_angles)
+            # print("Euler Angles (degrees):\n", np.degrees(euler_angles))
+            print(f'ID {tag.tag_id}|angles: {e_angl_deg}')
+
+        at_im_pub = self.bridge.cv2_to_imgmsg(at_image.astype(np.uint8))
+        self.at_pub.publish(at_im_pub)
+
+        # # Display the image with detected tags
+        # cv2.imshow('AprilTag Detection', image)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
    
 
-        centroid_row,centroid_col = self.get_centroid_it(np.where(merged_grad==1))  # gets the centroid of the points                         
+        if len(tags):
+            # print('TC',tag_center)
+            centroid_row,centroid_col = int(tag_center[1]),int(tag_center[0])   
+            # PUBLISH MARKER - lidar
+            AT_POINT_OF_INTEREST = [centroid_row,centroid_col]
+            # potreba pretransofrmovat do lidar frameP
+            # depth_int = depth_data[centroid_row,centroid_col] if depth_data[centroid_row,centroid_col] != 0 else tag_dist
+            # depth_int = int((tag_dist*1000))
+            depth_int = int((tag_dist*1000)*np.cos(40*(np.pi/180)))
+            if depth_int == 0 and self.last_depth is not None:
+                depth_int = self.last_depth
+            self.last_depth = depth_int
+            AT_POINT_OF_INTEREST = self.pix_to_camera(AT_POINT_OF_INTEREST,depth=depth_int)
+
+            # PUBLISH APRIL TAG MARKER ###############################################################################################
+            at_marker = Marker()
+            at_marker.header.frame_id = "laser"
+            at_marker.header.stamp = rospy.Time.now()
+            at_marker.type = 2
+            at_marker.id = 1
+            # Set the scale of the marker
+            at_marker.scale.x = 0.1
+            at_marker.scale.y = 0.1
+            at_marker.scale.z = 0.1
+            # Set the color
+            at_marker.color.r = 0.0
+            at_marker.color.g = 0.0
+            at_marker.color.b = 1.0
+            at_marker.color.a = 1.0
+            # Set the pose of the marker
+            at_marker.pose.position.x = AT_POINT_OF_INTEREST[0]
+            at_marker.pose.position.y = AT_POINT_OF_INTEREST[1]
+            at_marker.pose.position.z = 0
+            at_marker.pose.orientation.x = 0.0
+            at_marker.pose.orientation.y = 0.0
+            at_marker.pose.orientation.z = 0.0
+            at_marker.pose.orientation.w = 0.0
+
+            self.at_marker_pub.publish(at_marker)     
+
+            # PUBLISH ORIENTATION #######################################################################################################
+            pose_msg = PoseStamped()
+            # Fill in the header
+            pose_msg.header.stamp = rospy.Time.now()
+            pose_msg.header.frame_id = 'laser'  # Change to the appropriate frame
+            # Set the position
+            pose_msg.pose.position.x = AT_POINT_OF_INTEREST[0]
+            pose_msg.pose.position.y = AT_POINT_OF_INTEREST[1]
+            pose_msg.pose.position.z = 0
+            # Convert the Euler angles to a quaternion
+            quaternion = self.__euler_to_quaternion(
+                euler_angles[0],
+                euler_angles[1],
+                euler_angles[2]
+            )
+            # Set the orientation
+            pose_msg.pose.orientation.x = quaternion[0]
+            pose_msg.pose.orientation.y = quaternion[1]
+            pose_msg.pose.orientation.z = quaternion[2]
+            pose_msg.pose.orientation.w = quaternion[3]
+
+            # Publish the pose
+            self.pose_pub.publish(pose_msg)
+
+
+        else:
+            centroid_row,centroid_col = self.get_centroid_it(np.where(merged_grad==1))  # gets the centroid of the points   
+
 
         if centroid_row != None:
             cr = 10        # set the  width for the mean
@@ -144,9 +289,10 @@ class ProcessData:  # rename to detect?
             POINT_OF_INTEREST = self.pix_to_camera(POINT_OF_INTEREST,depth=depth_int)
 
 
-            focus_im = self.bfs_filter(depth_data,img_data,depth_int,[centroid_row,centroid_col])
-            focus_im_pub =  self.bridge.cv2_to_imgmsg(focus_im.astype(np.uint8))
-            self.focus_pub.publish(focus_im_pub)
+            # focus_im = self.bfs_filter(depth_data,img_data,depth_int,[centroid_row,centroid_col])
+            # focus_im_pub =  self.bridge.cv2_to_imgmsg(focus_im.astype(np.uint8))
+            # self.focus_pub.publish(focus_im_pub)
+
             # plt.imshow(focus_im)
             # plt.show()
             # if focus_im is not None:
@@ -158,7 +304,7 @@ class ProcessData:  # rename to detect?
             # cv2.imshow(cv2_foc)
             # cv2.waitKey(0)
 
-            # PUBLISH MARKER
+            # PUBLISH MARKER - lidar
 
             marker = Marker()
 
@@ -191,6 +337,12 @@ class ProcessData:  # rename to detect?
 
             self.marker_pub.publish(marker)
 
+            end_time = time.time()
+            if len(tags):
+                # print('EA',e_angl_deg)
+                rospy.loginfo(f'Car detected, time: {end_time - start_time}.\nAprilTag x:{AT_POINT_OF_INTEREST[0]},y:{AT_POINT_OF_INTEREST[1]},rot:{-e_angl_deg[1]}\nOur method x:{POINT_OF_INTEREST[0]},y:{POINT_OF_INTEREST[1]}')
+            else:
+                rospy.logwarn('No apriltags')
 
 
     def get_grad(self, data):
@@ -355,7 +507,7 @@ class ProcessData:  # rename to detect?
         # hom_p = np.array([x,y,1]).T
         # point = Rot@hom_p
         # print(point)
-        rospy.loginfo(f'point {point}')
+        # rospy.loginfo(f'point {point}')
 
         return point
     
@@ -381,7 +533,7 @@ class ProcessData:  # rename to detect?
 
         dist_d = 250
         dist_c = 100
-        print('start')
+        # print('start')
         while len(q):
             # print('len',len(q))
             u = np.array(q.pop(0))
@@ -401,7 +553,7 @@ class ProcessData:  # rename to detect?
                             mask[v[0]-chunk:v[0]+chunk,v[1]-chunk:v[1]+chunk] = 1
                             visited[v[0],v[1]] = 1
 
-        print('end')
+        # print('end')
         # print('im,d',image.shape,mask.shape)
         # filtered = cv2.bitwise_and(image,image,mask=mask)
         # filtered = np.zeros_like(image)
@@ -415,6 +567,29 @@ class ProcessData:  # rename to detect?
         # plt.show()
 
         return filtered
+
+    def __rotation_matrix_to_euler_angles(self,R):
+        # Assuming the angles are in radians.
+        sy = np.sqrt(R[0, 0] ** 2 + R[1, 0] ** 2)
+
+        singular = sy < 1e-6
+
+        if not singular:
+            x = np.arctan2(R[2, 1], R[2, 2])
+            y = np.arctan2(-R[2, 0], sy)
+            z = np.arctan2(R[1, 0], R[0, 0])
+        else:
+            x = np.arctan2(-R[1, 2], R[1, 1])
+            y = np.arctan2(-R[2, 0], sy)
+            z = 0
+
+        return np.array([x, y, z])
+
+    def __euler_to_quaternion(self,roll, pitch, yaw):
+        # quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
+        # quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
+        quaternion = tf.transformations.quaternion_from_euler(0, 0, -pitch)
+        return quaternion
     
     def __rgb_close(self,p1,p2):
         return np.sqrt(np.sum((p1 - p2) ** 2))
