@@ -11,7 +11,7 @@ import cv2
 from cv_bridge import CvBridge
 import message_filters      # for calback data synchronisation
 from sensor_msgs.msg import LaserScan
-from sklearn.cluster import DBSCAN
+# from sklearn.cluster import DBSCAN
 from visualization_msgs.msg import Marker
 
 class ProcessData:  # rename to detect?
@@ -242,70 +242,70 @@ class ProcessData:  # rename to detect?
         #scan_data = [point for point in scan_data if point[0] > POINT_OF_INTEREST[0] - FILTER_RADIUS and point[0] < POINT_OF_INTEREST[0] + FILTER_RADIUS and point[1] > POINT_OF_INTEREST[1] - FILTER_RADIUS and point[1] < POINT_OF_INTEREST[1] + FILTER_RADIUS]
         # print(type(scan_data),len(scan_data)) 
         # perform dbscan
-        clustering = DBSCAN(eps=0.1, min_samples=5).fit(scan_data)
-        labels = clustering.labels_
-        n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
-        n_noise_ = list(labels).count(-1)
-        print("Estimated number of clusters: %d" % n_clusters_)
-        print("Estimated number of noise points: %d" % n_noise_)
+        # clustering = DBSCAN(eps=0.1, min_samples=5).fit(scan_data)
+        # labels = clustering.labels_
+        # n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
+        # n_noise_ = list(labels).count(-1)
+        # print("Estimated number of clusters: %d" % n_clusters_)
+        # print("Estimated number of noise points: %d" % n_noise_)
         # print(np.min(np.array(scan_data)),np.max(np.array(scan_data)))
         
-        if self.vis:
-            d2vis = 500
-            # map data
-            min_x = scan_data[0][0]
-            min_y = scan_data[0][1]
-            max_x = scan_data[0][0]
-            max_y = scan_data[0][1]
-            # print(min_x,min_y,max_x,max_y)
-            for x, y in scan_data:
-                min_x = min(min_x, x)
-                min_y = min(min_y, y)
-                max_x = max(max_x, x)
-                max_y = max(max_y, y)
-            scan_map = np.zeros((d2vis, d2vis), dtype=np.uint8)
-            for x, y in scan_data:
-                # print('b',x,y)
-                x = ((-min_x + x) / (max_x - min_x))*(d2vis-1)
-                y = ((-min_y + y) / (max_y - min_y))*(d2vis-1)
-                x = round(x)
-                y = round(y)
-                # print(x,y)
-                scan_map[y, x] = 1  # Set RGB values to (255, 255, 255) at the coordinate
+        # if self.vis:
+        #     d2vis = 500
+        #     # map data
+        #     min_x = scan_data[0][0]
+        #     min_y = scan_data[0][1]
+        #     max_x = scan_data[0][0]
+        #     max_y = scan_data[0][1]
+        #     # print(min_x,min_y,max_x,max_y)
+        #     for x, y in scan_data:
+        #         min_x = min(min_x, x)
+        #         min_y = min(min_y, y)
+        #         max_x = max(max_x, x)
+        #         max_y = max(max_y, y)
+        #     scan_map = np.zeros((d2vis, d2vis), dtype=np.uint8)
+        #     for x, y in scan_data:
+        #         # print('b',x,y)
+        #         x = ((-min_x + x) / (max_x - min_x))*(d2vis-1)
+        #         y = ((-min_y + y) / (max_y - min_y))*(d2vis-1)
+        #         x = round(x)
+        #         y = round(y)
+        #         # print(x,y)
+        #         scan_map[y, x] = 1  # Set RGB values to (255, 255, 255) at the coordinate
         
-            # image
-            scan_img = np.zeros((d2vis, d2vis, 3), dtype=np.uint8)
-            # scan_img[scan_map == 1] = (255, 255, 255)
+        #     # image
+        #     scan_img = np.zeros((d2vis, d2vis, 3), dtype=np.uint8)
+        #     # scan_img[scan_map == 1] = (255, 255, 255)
             
-            # dbscan into image
-            unique_labels = set(labels)
-            # core_samples_mask = np.zeros_like(labels, dtype=bool)
-            # core_samples_mask[clustering.core_sample_indices_] = True
-            colors = [plt.cm.Spectral(each) for each in np.linspace(0, 1, len(unique_labels))]
-            for k, col in zip(unique_labels, colors):
-                if k == -1:
-                    col = (255, 0, 0)
-                else:
-                    col = [int(c*255) for c in col[0:3]]
+        #     # dbscan into image
+        #     unique_labels = set(labels)
+        #     # core_samples_mask = np.zeros_like(labels, dtype=bool)
+        #     # core_samples_mask[clustering.core_sample_indices_] = True
+        #     colors = [plt.cm.Spectral(each) for each in np.linspace(0, 1, len(unique_labels))]
+        #     for k, col in zip(unique_labels, colors):
+        #         if k == -1:
+        #             col = (255, 0, 0)
+        #         else:
+        #             col = [int(c*255) for c in col[0:3]]
 
-                indexes = [index for index, value in enumerate(labels) if value == k]
-                for i in indexes:
-                    x = scan_data[i][0]
-                    y = scan_data[i][1]
-                    x = ((-min_x + x) / (max_x - min_x))*(d2vis-1)
-                    y = ((-min_y + y) / (max_y - min_y))*(d2vis-1)
-                    x = round(x)
-                    y = round(y)
-                    scan_img[d2vis-y-1, x] = col
+        #         indexes = [index for index, value in enumerate(labels) if value == k]
+        #         for i in indexes:
+        #             x = scan_data[i][0]
+        #             y = scan_data[i][1]
+        #             x = ((-min_x + x) / (max_x - min_x))*(d2vis-1)
+        #             y = ((-min_y + y) / (max_y - min_y))*(d2vis-1)
+        #             x = round(x)
+        #             y = round(y)
+        #             scan_img[d2vis-y-1, x] = col
             
-            # show the cam mean of the car in the pic
-            x = ((-min_x + POINT_OF_INTEREST[0]) / (max_x - min_x))*(d2vis-1)
-            y = ((-min_y + POINT_OF_INTEREST[1]) / (max_y - min_y))*(d2vis-1)
-            x = round(x)
-            y = round(y)
-            scan_img[x-5:x+5,y-5:y+5] = (0, 0, 255)
+        #     # show the cam mean of the car in the pic
+        #     x = ((-min_x + POINT_OF_INTEREST[0]) / (max_x - min_x))*(d2vis-1)
+        #     y = ((-min_y + POINT_OF_INTEREST[1]) / (max_y - min_y))*(d2vis-1)
+        #     x = round(x)
+        #     y = round(y)
+        #     scan_img[x-5:x+5,y-5:y+5] = (0, 0, 255)
             
-            cv2.imshow("Image", scan_img)
+        #     cv2.imshow("Image", scan_img)
             #cv2.waitKey(0)
     
         if self.vis:

@@ -30,8 +30,8 @@ class ProcessData:  # rename to detect?
         rospy.loginfo('Initializing node')
         self.initialized = False
 
-        self.im_sub = message_filters.Subscriber('/camera/color/image_raw',Image)
-        self.depth_sub = message_filters.Subscriber('/camera/aligned_depth_to_color/image_raw',Image)
+        self.im_sub = message_filters.Subscriber('/camera/color/image_raw',Image,buff_size=2**24)
+        self.depth_sub = message_filters.Subscriber('/camera/aligned_depth_to_color/image_raw',Image,buff_size=2**24)
         #self.scan_sub = message_filters.Subscriber('/scan_dummy',LaserScan)
         self.scan_sub = rospy.Subscriber('/scan',LaserScan,self.scancb)
         #message_filters.Subscriber('/scan',LaserScan)
@@ -43,7 +43,9 @@ class ProcessData:  # rename to detect?
         rospy.Subscriber('/camera/color/camera_info', CameraInfo, self.camera_info_callback)
 
         self.marker_pub = rospy.Publisher('/detection/marker',Marker, queue_size=1)
-        self.grad_pub = rospy.Publisher('/detection/merged_grad',Image,queue_size=1)
+        self.grad_pub = rospy.Publisher('/gradient/merged_grad',Image,queue_size=1)
+        self.grad_im_pub = rospy.Publisher('/gradient/image_grad',Image,queue_size=1)
+        self.grad_d_pub = rospy.Publisher('/gradient/depth_grad',Image,queue_size=1)
         self.focus_pub = rospy.Publisher('/detection/focus',Image,queue_size=1)
         self.at_pub = rospy.Publisher('/detection/april_tags',Image,queue_size=1)
         self.at_marker_pub = rospy.Publisher('/detection/at_marker',Marker, queue_size=1)
@@ -136,6 +138,16 @@ class ProcessData:  # rename to detect?
         # mg_im.width = merged_grad.shape[1]
         # mg_im.height = merged_grad.shape[0]
         self.grad_pub.publish(mg_im)
+
+        ig_im= self.bridge.cv2_to_imgmsg(255*grad_im_filt.astype(np.int8), encoding="passthrough")
+        self.grad_im_pub.publish(ig_im)
+
+        dg_im= self.bridge.cv2_to_imgmsg(255*grad_filt_b.astype(np.int8), encoding="passthrough")
+        self.grad_d_pub.publish(dg_im)
+
+        # cv2.imshow('Image gradient',grad_im_filt.astype(np.float32))
+        # cv2.imshow('Depth gradient',grad_filt_b)
+        # cv2.waitKey(0)
 
         tags = self.at_detector.detect(gray_img)
 

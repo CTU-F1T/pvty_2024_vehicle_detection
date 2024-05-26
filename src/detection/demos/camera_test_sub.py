@@ -48,6 +48,7 @@ class ProcessImage:
 
         blurred_depth = cv2.GaussianBlur(depth_data, (13, 13), 1)                   # depth filtered with gaussian 
         grad_blurred = self.get_grad(blurred_depth)                                 # magnitude of x,y gradients
+        cv2.imshow('blurred depth',grad_blurred)
 
         gray_img = cv2.GaussianBlur(gray_img, (13, 13), 1)                          # grayscale filtered with gaussian 
         grad_im = self.get_grad(gray_img)                                           # magnitude of x,y gradients
@@ -61,6 +62,7 @@ class ProcessImage:
         th_idx_b = grad_blurred>th
         grad_filt_b= np.zeros_like(grad_blurred)                                    # thresholds blurred gradient
         grad_filt_b[th_idx_b] = 1
+        cv2.imshow('Filtered depth',grad_filt_b)
 
         interest_mask = np.ones_like(depth_data)                                    # filters out the region of interest
         interest_mask[:50,:] = 0                
@@ -134,7 +136,7 @@ class ProcessImage:
 
             # cv2.imshow('d',depth_data)
             # cv2.imshow('dc',depth_colormap)
-            cv2.imshow('original',img_data)
+            # cv2.imshow('original',img_data)
             # cv2.imshow('g',gradient)
             # cv2.imshow('gi',grad_filt)
             # cv2.imshow('gb',grad_filt_b)
