@@ -1,10 +1,13 @@
 actionlib==1.14.0
 angles==1.9.13
+apriltag==0.0.16
 bondpy==1.8.6
+build==1.2.1
 camera-calibration==1.17.0
 camera-calibration-parsers==1.12.0
 catkin==0.8.10
 catkin-pkg==1.0.0
+click==8.1.7
 contourpy==1.1.1
 controller-manager==0.20.0
 controller-manager-msgs==0.20.0
@@ -26,6 +29,7 @@ genmsg==0.6.0
 gennodejs==2.0.2
 genpy==0.6.15
 image-geometry==1.16.2
+importlib_metadata==7.1.0
 importlib_resources==6.4.0
 interactive-markers==1.12.0
 joint-state-publisher==1.15.1
@@ -38,7 +42,9 @@ numpy==1.24.4
 opencv-python==4.9.0.80
 packaging==24.0
 pillow==10.3.0
+pip-tools==7.4.1
 pyparsing==3.1.2
+pyproject_hooks==1.1.0
 python-dateutil==2.9.0.post0
 python-qt-binding==0.4.4
 PyYAML==6.0.1
@@ -113,6 +119,7 @@ tf2-geometry-msgs==0.7.7
 tf2-kdl==0.7.7
 tf2-py==0.7.7
 tf2-ros==0.7.7
+tomli==2.0.1
 topic-tools==1.16.0
 xacro==1.14.18
 zipp==3.18.1
