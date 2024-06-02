@@ -54,3 +54,38 @@ Follow these steps in three separate terminals:
     source .venv/bin/activate
     python3 camera_test_sub.py
     ```
+
+## Visualizing Data in RViz
+The script is publishing the following topics 
+- **/detection/marker**: Publishes markers for visualizing detections.
+- **/gradient/merged_grad**: Publishes merged gradient images.
+- **/gradient/image_grad**: Publishes gradient images.
+- **/gradient/depth_grad**: Publishes depth gradient images.
+- **/detection/focus**: Publishes focus area images.
+- **/detection/april_tags**: Publishes AprilTag detection images.
+- **/detection/at_marker**: Publishes markers for AprilTag detections.
+- **/detection/pose_estimate**: Publishes pose estimations of detected objects.
+
+To visualize the published topics in RViz, follow these steps:
+
+1. **Start RViz**:
+    ```bash
+    rviz
+    ```
+
+2. **Add the Relevant Topics**:
+    - Click the "Add" button in the bottom left.
+    - Select the appropriate type (e.g., Marker, Image, Pose) based on the topic.
+    - Add the following topics:
+      - `/detection/marker` (Marker)
+      - `/gradient/merged_grad` (Image)
+      - `/gradient/image_grad` (Image)
+      - `/gradient/depth_grad` (Image)
+      - `/detection/focus` (Image)
+      - `/detection/april_tags` (Image)
+      - `/detection/at_marker` (Marker)
+      - `/detection/pose_estimate` (Pose)
+
+3. **Customize the RViz Layout**:
+    - Arrange the display panels in RViz to suit your workflow.
+    - Use the "Views" panel to save different layout configurations.
