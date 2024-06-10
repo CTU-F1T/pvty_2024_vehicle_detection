@@ -1,4 +1,4 @@
-# Setting Up the Environment and Running the Script
+# Setting Up the Environment and Running the Script on local machine utilizing pre-recorded rosbags 
 
 ## Prerequisites
 

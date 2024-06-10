@@ -11,8 +11,10 @@ import tf
 import apriltag
 import time
 
+
 class Scan:
     """Class to handle LaserScan data"""
+
     def __init__(self):
         self.scan = None
         # Subscribe to the LaserScan topic
@@ -46,6 +48,7 @@ class Scan:
 
 class AprilTagDetection:
     """Class to handle AprilTag detection and pose estimation"""
+
     def __init__(self):
         options = apriltag.DetectorOptions(families="tag36h11")
         self.at_detector = apriltag.Detector(options)
@@ -76,11 +79,12 @@ class AprilTagDetection:
 
     def euler_to_quaternion(self, roll, pitch, yaw):
         """Convert Euler angles to quaternion"""
-        return tf.transformations.quaternion_from_euler(0, 0, -pitch)
+        return tf.transformations.quaternion_from_euler(roll, pitch, yaw)
 
 
 class ImageProcessing:
     """Main class to handle image and scan data processing"""
+
     def __init__(self, visualise=False):
         self.bridge = CvBridge()
         self.visualise = visualise
@@ -96,8 +100,8 @@ class ImageProcessing:
 
     def setup_subscribers(self):
         """Setup all necessary subscribers"""
-        self.im_sub = message_filters.Subscriber('/camera/color/image_raw', Image, buff_size=2**24)
-        self.depth_sub = message_filters.Subscriber('/camera/aligned_depth_to_color/image_raw', Image, buff_size=2**24)
+        self.im_sub = message_filters.Subscriber('/camera/color/image_raw', Image, buff_size=2 ** 24)
+        self.depth_sub = message_filters.Subscriber('/camera/aligned_depth_to_color/image_raw', Image, buff_size=2 ** 24)
         self.ts = message_filters.ApproximateTimeSynchronizer([self.im_sub, self.depth_sub], queue_size=1, slop=0.5)
         self.ts.registerCallback(self.process_data)
         rospy.Subscriber('/camera/color/camera_info', CameraInfo, self.camera_info_callback)
@@ -124,7 +128,7 @@ class ImageProcessing:
         # Convert ROS image messages to OpenCV images
         img_data = self.bridge.imgmsg_to_cv2(img, desired_encoding="passthrough")
         depth_data = self.bridge.imgmsg_to_cv2(depth, desired_encoding="passthrough")
-        
+
         # Process scan data
         scan = self.scan.scan
         if scan is None:
@@ -145,7 +149,7 @@ class ImageProcessing:
 
         # Detect AprilTags and publish detections
         tags = self.april_tag_detection.detect_and_estimate_pose(gray_img)
-        self.publish_april_tag_detections(tags, img_data)
+        self.publish_april_tag_detections(tags, img_data, depth_data, merged_grad)
 
         rospy.loginfo(f'Processing time: {time.time() - start_time}s')
 
@@ -180,9 +184,10 @@ class ImageProcessing:
         self.grad_im_pub.publish(self.bridge.cv2_to_imgmsg(255 * grad_im.astype(np.uint8), encoding="passthrough"))
         self.grad_d_pub.publish(self.bridge.cv2_to_imgmsg(255 * grad_blurred.astype(np.uint8), encoding="passthrough"))
 
-    def publish_april_tag_detections(self, tags, img_data):
+    def publish_april_tag_detections(self, tags, img_data, depth_data, merged_grad):
         """Publish AprilTag detections and their poses"""
         at_image = np.copy(img_data)
+        tag_center = None
         for tag in tags:
             # Draw tag boundaries and ID on the image
             corners, tag_center = tag.corners, tag.center
@@ -194,11 +199,11 @@ class ImageProcessing:
 
             # Estimate pose of the detected tag
             pose, e0, e1 = self.april_tag_detection.at_detector.detection_pose(
-                tag, 
-                camera_params=(self.april_tag_detection.camera_matrix[0, 0], 
-                               self.april_tag_detection.camera_matrix[1, 1], 
-                               self.april_tag_detection.camera_matrix[0, 2], 
-                               self.april_tag_detection.camera_matrix[1, 2]), 
+                tag,
+                camera_params=(self.april_tag_detection.camera_matrix[0, 0],
+                               self.april_tag_detection.camera_matrix[1, 1],
+                               self.april_tag_detection.camera_matrix[0, 2],
+                               self.april_tag_detection.camera_matrix[1, 2]),
                 tag_size=self.april_tag_detection.tag_size
             )
 
@@ -207,8 +212,83 @@ class ImageProcessing:
             e_angl_deg = np.degrees(euler_angles)
             rospy.loginfo(f'ID {tag.tag_id} | angles: {e_angl_deg}')
 
+            # Publish AprilTag marker
+            self.publish_marker(tag_center, depth_data, e_angl_deg)
+
+            # Publish pose
+            self.publish_pose(tag_center, depth_data, euler_angles)
+
         # Publish the image with detected tags
         self.at_pub.publish(self.bridge.cv2_to_imgmsg(at_image.astype(np.uint8)))
+
+        if tag_center:
+            centroid_row, centroid_col = int(tag_center[1]), int(tag_center[0])
+            depth_int = depth_data[centroid_row, centroid_col] if depth_data[centroid_row, centroid_col] != 0 else int(tag_center[2] * 1000 * np.cos(40 * (np.pi / 180)))
+            if depth_int == 0 and self.april_tag_detection.last_depth is not None:
+                depth_int = self.april_tag_detection.last_depth
+            self.april_tag_detection.last_depth = depth_int
+
+            POINT_OF_INTEREST = self.pix_to_camera([centroid_row, centroid_col], depth=depth_int)
+
+            rospy.loginfo(f'AprilTag x:{POINT_OF_INTEREST[0]},y:{POINT_OF_INTEREST[1]},rot:{-e_angl_deg[1]}')
+        else:
+            rospy.logwarn('No AprilTags detected')
+
+    def publish_marker(self, tag_center, depth_data, e_angl_deg):
+        """Publish AprilTag marker"""
+        centroid_row, centroid_col = int(tag_center[1]), int(tag_center[0])
+        depth_int = depth_data[centroid_row, centroid_col] if depth_data[centroid_row, centroid_col] != 0 else 1
+
+        POINT_OF_INTEREST = self.pix_to_camera([centroid_row, centroid_col], depth=depth_int)
+
+        marker = Marker()
+        marker.header.frame_id = "laser"
+        marker.header.stamp = rospy.Time.now()
+        marker.type = 2
+        marker.id = 1
+        marker.scale.x = 0.1
+        marker.scale.y = 0.1
+        marker.scale.z = 0.1
+        marker.color.r = 0.0
+        marker.color.g = 0.0
+        marker.color.b = 1.0
+        marker.color.a = 1.0
+        marker.pose.position.x = POINT_OF_INTEREST[0]
+        marker.pose.position.y = POINT_OF_INTEREST[1]
+        marker.pose.position.z = 0
+        marker.pose.orientation.x = 0.0
+        marker.pose.orientation.y = 0.0
+        marker.pose.orientation.z = 0.0
+        marker.pose.orientation.w = 1.0
+
+        self.at_marker_pub.publish(marker)
+
+    def publish_pose(self, tag_center, depth_data, euler_angles):
+        """Publish AprilTag pose"""
+        centroid_row, centroid_col = int(tag_center[1]), int(tag_center[0])
+        depth_int = depth_data[centroid_row, centroid_col] if depth_data[centroid_row, centroid_col] != 0 else 1
+
+        POINT_OF_INTEREST = self.pix_to_camera([centroid_row, centroid_col], depth=depth_int)
+
+        pose_msg = PoseStamped()
+        pose_msg.header.stamp = rospy.Time.now()
+        pose_msg.header.frame_id = 'laser'
+        pose_msg.pose.position.x = POINT_OF_INTEREST[0]
+        pose_msg.pose.position.y = POINT_OF_INTEREST[1]
+        pose_msg.pose.position.z = 0
+
+        quaternion = self.april_tag_detection.euler_to_quaternion(
+            euler_angles[0],
+            euler_angles[1],
+            euler_angles[2]
+        )
+
+        pose_msg.pose.orientation.x = quaternion[0]
+        pose_msg.pose.orientation.y = quaternion[1]
+        pose_msg.pose.orientation.z = quaternion[2]
+        pose_msg.pose.orientation.w = quaternion[3]
+
+        self.pose_pub.publish(pose_msg)
 
     def interpolate(self, depth_data):
         """Interpolate missing depth data (zero values)"""

@@ -19,6 +19,17 @@ Welcome to the F1tenth Opponent Vehicle Detection project wiki. This project was
     roslaunch racecar teleop.launch
     ```
 
+4. **Launch roscore**:
+    ```bash
+    roscore
+    ```
+
+5. **Launch main.py in the /src/detection folder**:
+    - there could be a possibility that the main.py is not working properly, if that happens please use the `april_tag_demo.py` in the /src/detection/demos folder
+    ```bash
+    python3 main.py
+    ```
+
 ### Additional Resources
 
 - **Camera ROS Package**: [Intel RealSense ROS](https://github.com/IntelRealSense/realsense-ros)
