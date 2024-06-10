@@ -24,7 +24,12 @@ Welcome to the F1tenth Opponent Vehicle Detection project wiki. This project was
     roscore
     ```
 
-5. **Launch main.py in the /src/detection folder**:
+5. **Launch the camera from the scripts folder**:
+    ```
+    ./scripts/start_camera
+    ```
+
+6. **Launch main.py in the /src/detection folder**:
     - there could be a possibility that the main.py is not working properly, if that happens please use the `april_tag_demo.py` in the /src/detection/demos folder
     ```bash
     python3 main.py
