@@ -16,11 +16,11 @@
     git clone https://github.com/CTU-F1T/pvty_2024_vehicle_detection.git
     ```
 
-2. **Download ROS Bags**: Download the necessary ROS bags from the Gdisk folder [here](https://drive.google.com/drive/u/1/folders/1NrswYhbbgiJ4l5COxxrjti3AzJohsMWV) and place them in a directory named `src/data` within your project directory.
+2. **Download ROS Bags**: Download the necessary ROS bags from the Gdisk folder [here](https://drive.google.com/drive/folders/1DuLVWwxOwGOYZqpi_2dEGsDMjf_Gl4vp) and place them in a directory named `src/data` within your project directory.
 
 3. **Navigate to the `/src` Folder**:
     ```bash
-    cd pvty_2024_vehicle_detection/src
+    cd pvty_2024_vehicle_detection/src/detection
     ```
 
 4. **Create a Python Virtual Environment and Install Dependencies**:
@@ -46,13 +46,13 @@ Follow these steps in three separate terminals:
 
 2. **Play the ROS Bag**:
     ```bash
-    rosbag play -l src/data/01_test_rec.bag
+    rosbag play -l src/data/angle.bag
     ```
 
 3. **Activate the Virtual Environment and Run the Python Script**:
     ```bash
     source .venv/bin/activate
-    python3 camera_test_sub.py
+    python3 main.py
     ```
 
 ## Visualizing Data in RViz
